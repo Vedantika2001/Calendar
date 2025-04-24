@@ -1,23 +1,11 @@
 import pandas as pd
 import yfinance as yf
 from datetime import datetime, timedelta
-from datetime import datetime, timedelta
-from datetime import datetime, timedelta
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
-
-
-# # Step 1: Load CSV file
-# input_file = "Calendar1.csv"
-# df = pd.read_csv(input_file)
-
-# # Ensure correct date formatting
-# df["Calendar Date"] = pd.to_datetime(df["Calendar Date"], errors="coerce")
-
-
 
 # ─────────────────────────────────────────────────────────────
 # Fetch and update the last available Nifty50 close price
