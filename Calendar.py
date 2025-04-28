@@ -9,8 +9,6 @@ from selenium.webdriver.support import expected_conditions as EC
 import time
 import re
 
-
-# Ensure correct date formatting
     
 
 def setup_driver():
@@ -35,7 +33,6 @@ date_csv = yesterday.strftime("%d-%m-%Y")
 # ─────────────────────────────────────────────────────────────
 
 def update_latest_nifty_close(df):
-    # driver = webdriver.Chrome(options=options)
     driver = setup_driver()
     driver.get("https://in.investing.com/indices/s-p-cnx-nifty-historical-data")
 
@@ -51,29 +48,46 @@ def update_latest_nifty_close(df):
     )
 
     rows = table.find_elements(By.XPATH, ".//tbody/tr")
+
     nifty_close = None
+    found_date = None
 
-    for row in rows:
-        cols = row.find_elements(By.TAG_NAME, "td")
-        if len(cols) >= 2:
-            date_text = cols[0].text.strip()
-            nifty_price = cols[1].text.strip().replace(",", "")
-            if date_text == yesterday_str_web:
-                nifty_close = float(nifty_price)
-                print(f"📅Found Nifty50 close for {yesterday_str_web}: {nifty_close}")
-                break
+    delta = 1  
+    max_days = 7 
 
+    while delta <= max_days:
+        check_date = datetime.now() - timedelta(days=delta)
+        check_date_web = check_date.strftime("%b %d, %Y")
+        check_date_csv = check_date.strftime("%d-%m-%Y")
+
+        # print(f"🔎 Checking for {check_date_web}...")
+
+        for row in rows:
+            cols = row.find_elements(By.TAG_NAME, "td")
+            if len(cols) >= 2:
+                date_text = cols[0].text.strip()
+                nifty_price = cols[1].text.strip().replace(",", "")
+                if date_text == check_date_web:
+                    nifty_close = float(nifty_price)
+                    found_date = check_date_csv
+                    print(f"📅Found Nifty50 close for {check_date_web}: {nifty_close}")
+                    break
+
+        if nifty_close is not None:
+            break 
+        else:
+            delta += 1  
     driver.quit()
 
-    if nifty_close:
-        mask = df["Calendar Date"].dt.strftime("%d-%m-%Y") == yesterday_str
+    if nifty_close and found_date:
+        mask = df["Calendar Date"].dt.strftime("%d-%m-%Y") == found_date
         if mask.any():
             df.loc[mask, "Nifty50 Close Price"] = nifty_close
-            print("✅Nifty50 close price updated in DataFrame.")
+            print(f"✅Nifty50 close price updated for {found_date} in DataFrame.")
         else:
-            print("⚠️ Yesterday's date not found in DataFrame.")
+            print(f"⚠️ Date {found_date} not found in DataFrame.")
     else:
-        print("❌ Could not find Nifty50 close price on website.")
+        print("❌ Could not find any Nifty50 close price on website.")
 
     return df
 
@@ -656,7 +670,6 @@ def apply_sensex50_monthly_expiry(df):
 # ───────────────────────────────────────────────
 def update_latest_banknifty_close(df):
     driver = setup_driver()
-
     driver.get("https://in.investing.com/indices/bank-nifty-historical-data")
 
     try:
@@ -671,31 +684,55 @@ def update_latest_banknifty_close(df):
     )
 
     rows = table.find_elements(By.XPATH, ".//tbody/tr")
-    bank_close = None
+    banknifty_data = []
 
     for row in rows:
         cols = row.find_elements(By.TAG_NAME, "td")
         if len(cols) >= 2:
             date_text = cols[0].text.strip()
             close_price = cols[1].text.strip().replace(",", "")
-            if date_text == yesterday_str_web:
-                bank_close = float(close_price)
-                print(f"📅Found BankNifty close for {yesterday_str_web}: {bank_close}")
-                break
+            banknifty_data.append((date_text, close_price))
 
     driver.quit()
 
-    if bank_close:
-        mask = df["Calendar Date"].dt.strftime("%d-%m-%Y") == yesterday_str
+    # 🔥 Now search for available date using WHILE LOOP
+    bank_close = None
+    found_date = None
+
+    delta = 1
+    max_days = 7   # Search max last 7 days if needed
+
+    while delta <= max_days:
+        check_date = datetime.now() - timedelta(days=delta)
+        check_date_web = check_date.strftime("%b %d, %Y")
+        check_date_csv = check_date.strftime("%d-%m-%Y")
+
+        # print(f"🔎 Checking for {check_date_web}...")
+
+        for date_text, close_price in banknifty_data:
+            if date_text == check_date_web:
+                bank_close = float(close_price)
+                found_date = check_date_csv
+                print(f"📅Found BankNifty close for {check_date_web}: {bank_close}")
+                break
+
+        if bank_close is not None:
+            break
+        else:
+            delta += 1
+
+    if bank_close and found_date:
+        mask = df["Calendar Date"].dt.strftime("%d-%m-%Y") == found_date
         if mask.any():
             df.loc[mask, "Bank Nifty Close Price"] = bank_close
-            print("✅Bank Nifty close price updated in DataFrame.")
+            print(f"✅BankNifty close price updated for {found_date} in DataFrame.")
         else:
-            print("⚠️ Yesterday's date not found in DataFrame.")
+            print(f"⚠️ Date {found_date} not found in Calendar1.csv.")
     else:
-        print("❌ Could not find FinNifty close price on website.")
+        print("❌ Could not find any BankNifty close price.")
 
     return df
+
 
 # ───────────────────────────────────────────────
 # Fin Nifty Close Price
@@ -716,37 +753,60 @@ def update_finnifty_close_price(df):
     )
 
     rows = table.find_elements(By.XPATH, ".//tbody/tr")
-    fin_close = None
+    finnifty_data = []
 
     for row in rows:
         cols = row.find_elements(By.TAG_NAME, "td")
         if len(cols) >= 2:
             date_text = cols[0].text.strip()
             close_price = cols[1].text.strip().replace(",", "")
-            if date_text == yesterday_str_web:
-                fin_close = float(close_price)
-                print(f"📅Found FinNifty close for {yesterday_str_web}: {fin_close}")
-                break
+            finnifty_data.append((date_text, close_price))
 
     driver.quit()
 
-    if fin_close:
-        mask = df["Calendar Date"].dt.strftime("%d-%m-%Y") == yesterday_str
+    # 🔥 Now use while loop to search for available date
+    fin_close = None
+    found_date = None
+
+    delta = 1
+    max_days = 7
+
+    while delta <= max_days:
+        check_date = datetime.now() - timedelta(days=delta)
+        check_date_web = check_date.strftime("%b %d, %Y")
+        check_date_csv = check_date.strftime("%d-%m-%Y")
+
+        # print(f"🔎 Checking for {check_date_web}...")
+
+        for date_text, close_price in finnifty_data:
+            if date_text == check_date_web:
+                fin_close = float(close_price)
+                found_date = check_date_csv
+                print(f"📅Found FinNifty close for {check_date_web}: {fin_close}")
+                break
+
+        if fin_close is not None:
+            break
+        else:
+            delta += 1
+
+    if fin_close and found_date:
+        mask = df["Calendar Date"].dt.strftime("%d-%m-%Y") == found_date
         if mask.any():
             df.loc[mask, "Fin Nifty Close Price"] = fin_close
-            print("✅Fin Nifty close price updated in DataFrame.")
+            print(f"✅FinNifty close price updated for {found_date} in DataFrame.")
         else:
-            print("⚠️ Yesterday's date not found in DataFrame.")
+            print(f"⚠️ Date {found_date} not found in Calendar1.csv.")
     else:
-        print("❌ Could not find FinNifty close price on website.")
+        print("❌ Could not find any FinNifty close price.")
 
     return df
+
 
 # ───────────────────────────────────────────────
 # VIX
 # ───────────────────────────────────────────────
 def update_vix(df):
-
     driver = setup_driver()
     driver.get("https://in.investing.com/indices/india-vix-historical-data")
 
@@ -762,39 +822,57 @@ def update_vix(df):
     )
 
     rows = table.find_elements(By.XPATH, ".//tbody/tr")
-    vix_close = None
+    vix_data = []
 
     for row in rows:
         cols = row.find_elements(By.TAG_NAME, "td")
         if len(cols) >= 2:
             date_text = cols[0].text.strip()
             close_price = cols[1].text.strip().replace(",", "")
-            if date_text == yesterday_str_web:
-                vix_close = float(close_price)
-                print(f"📅Found VIX for {yesterday_str_web}: {vix_close}")
-                break
+            vix_data.append((date_text, close_price))
 
     driver.quit()
 
-    if vix_close:
-        mask = df["Calendar Date"].dt.strftime("%d-%m-%Y") == yesterday_str
+    # 🔥 Now use while loop to search for available date
+    vix_close = None
+    found_date = None
+
+    delta = 1
+    max_days = 7
+
+    while delta <= max_days:
+        check_date = datetime.now() - timedelta(days=delta)
+        check_date_web = check_date.strftime("%b %d, %Y")
+        check_date_csv = check_date.strftime("%d-%m-%Y")
+
+        for date_text, close_price in vix_data:
+            if date_text == check_date_web:
+                vix_close = float(close_price)
+                found_date = check_date_csv
+                print(f"📅Found VIX for {check_date_web}: {vix_close}")
+                break
+
+        if vix_close is not None:
+            break
+        else:
+            delta += 1
+
+    if vix_close and found_date:
+        mask = df["Calendar Date"].dt.strftime("%d-%m-%Y") == found_date
         if mask.any():
             df.loc[mask, "VIX"] = vix_close
-            print("✅VIX updated in DataFrame.")
+            print(f"✅VIX updated for {found_date} in DataFrame.")
         else:
-            print("⚠️ Yesterday's date not found in DataFrame.")
+            print(f"⚠️ Date {found_date} not found in Calendar1.csv.")
     else:
-        print("❌ Could not find VIX on website.")
+        print("❌ Could not find any VIX close price.")
 
     return df
-
 
 # ───────────────────────────────────────────────
 # Sensex
 # ───────────────────────────────────────────────
-
 def update_latest_sensex_close(df):
-
     driver = setup_driver()
     driver.get("https://in.investing.com/indices/sensex-historical-data")
 
@@ -810,29 +888,52 @@ def update_latest_sensex_close(df):
     )
 
     rows = table.find_elements(By.XPATH, ".//tbody/tr")
-    sensex = None
+    sensex_data = []
 
     for row in rows:
         cols = row.find_elements(By.TAG_NAME, "td")
         if len(cols) >= 2:
             date_text = cols[0].text.strip()
             close_price = cols[1].text.strip().replace(",", "")
-            if date_text == yesterday_str_web:
-                sensex = float(close_price)
-                print(f"📅Found SENSEX for {yesterday_str_web}: {sensex}")
-                break
+            sensex_data.append((date_text, close_price))
 
     driver.quit()
 
-    if sensex:
-        mask = df["Calendar Date"].dt.strftime("%d-%m-%Y") == yesterday_str
+    # 🔥 Now use while loop to find last available close
+    sensex = None
+    found_date = None
+
+    delta = 1
+    max_days = 7  # Max lookback if consecutive holidays
+
+    while delta <= max_days:
+        check_date = datetime.now() - timedelta(days=delta)
+        check_date_web = check_date.strftime("%b %d, %Y")
+        check_date_csv = check_date.strftime("%d-%m-%Y")
+
+        # print(f"🔎 Checking for {check_date_web}...")
+
+        for date_text, close_price in sensex_data:
+            if date_text == check_date_web:
+                sensex = float(close_price)
+                found_date = check_date_csv
+                print(f"📅Found SENSEX for {check_date_web}: {sensex}")
+                break
+
+        if sensex is not None:
+            break
+        else:
+            delta += 1
+
+    if sensex and found_date:
+        mask = df["Calendar Date"].dt.strftime("%d-%m-%Y") == found_date
         if mask.any():
             df.loc[mask, "SENSEX"] = sensex
-            print("✅SENSEX updated in DataFrame.")
+            print(f"✅SENSEX updated for {found_date} in DataFrame.")
         else:
-            print("⚠️ Yesterday's date not found in DataFrame.")
+            print(f"⚠️ Date {found_date} not found in Calendar1.csv.")
     else:
-        print("❌ Could not find SENSEX on website.")
+        print("❌ Could not find any SENSEX close price.")
 
     return df
 
@@ -843,7 +944,6 @@ def update_latest_sensex_close(df):
 # ───────────────────────────────────────────────
 
 def update_latest_gold_close(df):
-   
     def fetch_gold_price(date_str_web):
         """Fetches the gold close price from the investing.com historical data page."""
         try:
@@ -888,33 +988,49 @@ def update_latest_gold_close(df):
             return None, None
 
     # ──────────────────────────────
-    # Actual update logic
+    # Actual update logic with while loop
     # ──────────────────────────────
 
-    price, matched_date = fetch_gold_price(date_web)
+    price = None
+    matched_date = None
+
+    delta = 1
+    max_days = 7  # Max lookback if consecutive holidays
+
+    while delta <= max_days:
+        check_date = datetime.now() - timedelta(days=delta)
+        check_date_web = check_date.strftime("%b %d, %Y")
+        check_date_csv = check_date.strftime("%d-%m-%Y")
+
+        # print(f"🔎 Checking for Gold price on {check_date_web}...")
+
+        price, matched_date = fetch_gold_price(check_date_web)
+
+        if price:
+            break
+        else:
+            delta += 1
 
     if price and matched_date:
-        mask = df["Calendar Date"].dt.strftime("%d-%m-%Y") == date_csv
+        mask = df["Calendar Date"].dt.strftime("%d-%m-%Y") == check_date_csv
         if mask.any():
             df.loc[mask, "Gold USD Price"] = price
-            print(f"✅ Found Gold USD close for {matched_date}: {price}")
-            print("✅ Gold USD Close Price updated in DataFrame.")
+            print(f"✅Found Gold USD close for {matched_date}: {price}")
+            print("✅Gold USD Close Price updated in DataFrame.")
         else:
-            print("⚠️ Date not found in DataFrame.")
+            print(f"⚠️Date {check_date_csv} not found in DataFrame.")
     else:
-        print("❌ Could not fetch gold close price.")
+        print("❌ Could not fetch Gold close price.")
 
     return df
-
 
 # ───────────────────────────────────────────────
 # USD/INR
 # ───────────────────────────────────────────────
 
 def update_latest_usdinr_close(df):
-   
     def fetch_usdinr_price(date_str_web):
-        """Fetches the gold close price from the investing.com historical data page."""
+        """Fetches the USD/INR close price from the investing.com historical data page."""
         try:
             driver = setup_driver()
             driver.get("https://in.investing.com/currencies/usd-inr-historical-data")
@@ -923,7 +1039,7 @@ def update_latest_usdinr_close(df):
                 WebDriverWait(driver, 10).until(
                     EC.element_to_be_clickable((By.ID, "onetrust-accept-btn-handler"))
                 ).click()
-                # print("🍪Accepted cookies.")
+                # print("🍪 Accepted cookies.")
             except:
                 print("✅No cookie popup or already accepted.")
 
@@ -936,7 +1052,7 @@ def update_latest_usdinr_close(df):
             for _ in range(10):
                 if any(row.text.strip() for row in rows):
                     break
-                print("⌛Waiting for data to populate...")
+                # print("⌛ Waiting for data to populate...")
                 time.sleep(1)
 
             for idx, row in enumerate(rows):
@@ -956,19 +1072,37 @@ def update_latest_usdinr_close(df):
             return None, None
 
     # ──────────────────────────────
-    # Actual update logic
+    # Actual update logic with while loop
     # ──────────────────────────────
 
-    price, matched_date = fetch_usdinr_price(date_web)
+    price = None
+    matched_date = None
+
+    delta = 1
+    max_days = 7  # Max lookback if consecutive holidays
+
+    while delta <= max_days:
+        check_date = datetime.now() - timedelta(days=delta)
+        check_date_web = check_date.strftime("%b %d, %Y")
+        check_date_csv = check_date.strftime("%d-%m-%Y")
+
+        # print(f"🔎 Checking for USD/INR price on {check_date_web}...")
+
+        price, matched_date = fetch_usdinr_price(check_date_web)
+
+        if price:
+            break
+        else:
+            delta += 1
 
     if price and matched_date:
-        mask = df["Calendar Date"].dt.strftime("%d-%m-%Y") == date_csv
+        mask = df["Calendar Date"].dt.strftime("%d-%m-%Y") == check_date_csv
         if mask.any():
             df.loc[mask, "USD/INR"] = price
             print(f"✅Found USD/INR close for {matched_date}: {price}")
             print("✅USD/INR Close Price updated in DataFrame.")
         else:
-            print("⚠️ Date not found in DataFrame.")
+            print(f"⚠️Date {check_date_csv} not found in DataFrame.")
     else:
         print("❌ Could not fetch USD/INR close price.")
 
@@ -981,7 +1115,7 @@ def update_latest_usdinr_close(df):
 def update_latest_eurinr_close(df):
 
     def fetch_eurinr_price(date_str_web):
-        """Fetches the gold close price from the investing.com historical data page."""
+        """Fetches the EUR/INR close price from the investing.com historical data page."""
         try:
             driver = setup_driver()
             driver.get("https://in.investing.com/currencies/eur-inr-historical-data")
@@ -991,7 +1125,7 @@ def update_latest_eurinr_close(df):
                 WebDriverWait(driver, 10).until(
                     EC.element_to_be_clickable((By.ID, "onetrust-accept-btn-handler"))
                 ).click()
-                print("🍪Accepted cookies.")
+                # print("🍪 Accepted cookies.")
             except:
                 print("✅No cookie popup or already accepted.")
 
@@ -1004,7 +1138,7 @@ def update_latest_eurinr_close(df):
             for _ in range(10):
                 if any(row.text.strip() for row in rows):
                     break
-                print("⌛Waiting for data to populate...")
+                # print("⌛ Waiting for data to populate...")
                 time.sleep(1)
 
             for idx, row in enumerate(rows):
@@ -1022,23 +1156,43 @@ def update_latest_eurinr_close(df):
         except Exception as e:
             print(f"❌ Error while scraping: {e}")
             return None, None
-            
 
-    price, matched_date = fetch_eurinr_price(date_web)
+    # ──────────────────────────────
+    # Actual update logic with while loop
+    # ──────────────────────────────
+
+    price = None
+    matched_date = None
+
+    delta = 1
+    max_days = 7  # Max lookback if consecutive holidays
+
+    while delta <= max_days:
+        check_date = datetime.now() - timedelta(days=delta)
+        check_date_web = check_date.strftime("%b %d, %Y")
+        check_date_csv = check_date.strftime("%d-%m-%Y")
+
+        # print(f"🔎 Checking for EUR/INR price on {check_date_web}...")
+
+        price, matched_date = fetch_eurinr_price(check_date_web)
+
+        if price:
+            break
+        else:
+            delta += 1
 
     if price and matched_date:
-        mask = df["Calendar Date"].dt.strftime("%d-%m-%Y") == date_csv
+        mask = df["Calendar Date"].dt.strftime("%d-%m-%Y") == check_date_csv
         if mask.any():
             df.loc[mask, "EUR/INR"] = price
             print(f"✅Found EUR/INR close for {matched_date}: {price}")
             print("✅EUR/INR Close Price updated in DataFrame.")
         else:
-            print("⚠️ Date not found in DataFrame.")
+            print(f"⚠️ Date {check_date_csv} not found in DataFrame.")
     else:
-        print("❌ Could not fetch gold close price.")
+        print("❌ Could not fetch EUR/INR close price.")
 
     return df
-
 
 # ──────────────────────
 # India 10 Y Bond Yield
@@ -1052,47 +1206,67 @@ def india_10_y_bond_yield(df):
         WebDriverWait(driver, 10).until(
             EC.element_to_be_clickable((By.ID, "onetrust-accept-btn-handler"))
         ).click()
-    except:
-        pass
+    except Exception as e:
+        print(f"⚠️Failed to accept cookies: {str(e).splitlines()[0]}")
 
-    table = WebDriverWait(driver, 30).until(
-        EC.presence_of_element_located((By.XPATH, "//table"))
-    )
+    try:
+        table = WebDriverWait(driver, 30).until(
+            EC.presence_of_element_located((By.XPATH, "//table"))
+        )
+    except Exception as e:
+        print(f"⚠️ Table not found: {e}")
+        driver.quit()
+        return df
 
     rows = table.find_elements(By.XPATH, ".//tbody/tr")
     india_bond_yield = None
+    found_date = None
 
-    for row in rows:
-        cols = row.find_elements(By.TAG_NAME, "td")
-        if len(cols) >= 2:
-            date_text = cols[0].text.strip()
-            close_price = cols[1].text.strip().replace(",", "")
-            if date_text == yesterday_str_web:
-                india_bond_yield = float(close_price)
-                print(f"✅Found India 10 Y Bond Yield for {yesterday_str_web}: {india_bond_yield}")
-                break
+    delta = 1  # start with yesterday
+    max_days = 7  # Don't go back endlessly, limit to last 7 days
+
+    while delta <= max_days:
+        check_date = datetime.now() - timedelta(days=delta)
+        check_date_web = check_date.strftime("%b %d, %Y")
+        check_date_csv = check_date.strftime("%d-%m-%Y")
+
+        # print(f"🔎 Checking for {check_date_web}...")
+
+        for row in rows:
+            cols = row.find_elements(By.TAG_NAME, "td")
+            if len(cols) >= 2:
+                date_text = cols[0].text.strip()
+                bond_yield = cols[1].text.strip().replace(",", "")
+                if date_text == check_date_web:
+                    india_bond_yield = float(bond_yield)
+                    found_date = check_date_csv
+                    print(f"✅Found India 10 Y Bond Yield for {check_date_web}: {india_bond_yield}")
+                    break
+
+        if india_bond_yield is not None:
+            break  
+        else:
+            delta += 1
 
     driver.quit()
 
-    if india_bond_yield:
-        mask = df["Calendar Date"].dt.strftime("%d-%m-%Y") == yesterday_str
+    if india_bond_yield and found_date:
+        mask = df["Calendar Date"].dt.strftime("%d-%m-%Y") == found_date
         if mask.any():
             df.loc[mask, "India 10 Y Bond Yield"] = india_bond_yield
-            print("✅India 10 Y Bond Yield updated in DataFrame.")
+            print(f"✅India 10 Y Bond Yield updated for {found_date} in DataFrame.")
         else:
-            print("⚠️ Yesterday's date not found in DataFrame.")
+            print(f"⚠️ Date {found_date} not found in DataFrame.")
     else:
         print("❌ Could not find India 10 Y Bond Yield on website.")
 
     return df
-
 
 # ──────────────────────
 # US 10 Y Bond Yield
 # ──────────────────────
 
 def us_10_y_bond_yield(df):
-
     driver = setup_driver()
     driver.get("https://in.investing.com/rates-bonds/u.s.-10-year-bond-yield-historical-data")
 
@@ -1100,35 +1274,57 @@ def us_10_y_bond_yield(df):
         WebDriverWait(driver, 10).until(
             EC.element_to_be_clickable((By.ID, "onetrust-accept-btn-handler"))
         ).click()
-    except:
-        pass
+    except Exception as e:
+        print(f"⚠️Failed to accept cookies: {str(e).splitlines()[0]}")
 
-    table = WebDriverWait(driver, 30).until(
-        EC.presence_of_element_located((By.XPATH, "//table"))
-    )
+    try:
+        table = WebDriverWait(driver, 30).until(
+            EC.presence_of_element_located((By.XPATH, "//table"))
+        )
+    except Exception as e:
+        print(f"⚠️ Table not found: {e}")
+        driver.quit()
+        return df
 
     rows = table.find_elements(By.XPATH, ".//tbody/tr")
     us_bond_yield = None
+    found_date = None
 
-    for row in rows:
-        cols = row.find_elements(By.TAG_NAME, "td")
-        if len(cols) >= 2:
-            date_text = cols[0].text.strip()
-            close_price = cols[1].text.strip().replace(",", "")
-            if date_text == yesterday_str_web:
-                us_bond_yield = float(close_price)
-                print(f"✅Found US 10 Y Bond Yield for {yesterday_str_web}: {us_bond_yield}")
-                break
+    delta = 1  # start with yesterday
+    max_days = 7  # Don't go back endlessly, limit to last 7 days
+
+    while delta <= max_days:
+        check_date = datetime.now() - timedelta(days=delta)
+        check_date_web = check_date.strftime("%b %d, %Y")
+        check_date_csv = check_date.strftime("%d-%m-%Y")
+
+        # print(f"🔎 Checking for {check_date_web}...")
+
+        for row in rows:
+            cols = row.find_elements(By.TAG_NAME, "td")
+            if len(cols) >= 2:
+                date_text = cols[0].text.strip()
+                bond_yield = cols[1].text.strip().replace(",", "")
+                if date_text == check_date_web:
+                    us_bond_yield = float(bond_yield)
+                    found_date = check_date_csv
+                    print(f"✅Found US 10 Y Bond Yield for {check_date_web}: {us_bond_yield}")
+                    break
+
+        if us_bond_yield is not None:
+            break  
+        else:
+            delta += 1
 
     driver.quit()
 
-    if us_bond_yield:
-        mask = df["Calendar Date"].dt.strftime("%d-%m-%Y") == yesterday_str
+    if us_bond_yield and found_date:
+        mask = df["Calendar Date"].dt.strftime("%d-%m-%Y") == found_date
         if mask.any():
             df.loc[mask, "US 10 Y Bond Yield"] = us_bond_yield
-            print("✅US 10 Y Bond Yield updated in DataFrame.")
+            print(f"✅US 10 Y Bond Yield updated for {found_date} in DataFrame.")
         else:
-            print("⚠️ Yesterday's date not found in DataFrame.")
+            print(f"⚠️Date {found_date} not found in DataFrame.")
     else:
         print("❌ Could not find US 10 Y Bond Yield on website.")
 
@@ -1140,9 +1336,9 @@ def us_10_y_bond_yield(df):
 # ────────────────
 
 def update_latest_dollar_index_close(df):
-
     def fetch_dollar_price(date_str_web):
-        """Fetches the gold close price from the investing.com historical data page."""
+        """Fetches the Dollar Index close price from the investing.com historical data page."""
+        driver = None
         try:
             driver = setup_driver()
             driver.get("https://in.investing.com/indices/usdollar-historical-data")
@@ -1152,9 +1348,9 @@ def update_latest_dollar_index_close(df):
                 WebDriverWait(driver, 10).until(
                     EC.element_to_be_clickable((By.ID, "onetrust-accept-btn-handler"))
                 ).click()
-                print("🍪Accepted cookies.")
-            except:
-                print("✅No cookie popup or already accepted.")
+                print("🍪 Accepted cookies.")
+            except Exception:
+                print("✅ No cookie popup or already accepted.")
 
             WebDriverWait(driver, 20).until(
                 EC.presence_of_element_located((By.XPATH, "//table//tbody/tr"))
@@ -1162,11 +1358,13 @@ def update_latest_dollar_index_close(df):
 
             rows = driver.find_elements(By.XPATH, "//table//tbody/tr")
 
+            # Wait for data if rows are initially empty
             for _ in range(10):
                 if any(row.text.strip() for row in rows):
                     break
-                print("⌛Waiting for data to populate...")
+                # print("⌛ Waiting for data to populate...")
                 time.sleep(1)
+                rows = driver.find_elements(By.XPATH, "//table//tbody/tr")
 
             for idx, row in enumerate(rows):
                 cols = row.find_elements(By.TAG_NAME, "td")
@@ -1174,29 +1372,40 @@ def update_latest_dollar_index_close(df):
                     date_text = cols[0].text.strip()
                     close_price = cols[1].text.strip().replace(",", "")
                     if clean_date(date_text) == clean_date(date_str_web):
-                        driver.quit()
+                        print(f"✅ Found Dollar Index close for {date_text}: {close_price}")
                         return float(close_price), date_text
 
-            driver.quit()
+            print("⚠️ Dollar Index close price for the given date not found.")
             return None, None
 
         except Exception as e:
-            print(f"❌ Error while scraping: {e}")
+            print(f"❌ Error while scraping Dollar Index: {e}")
             return None, None
-            
 
-    price, matched_date = fetch_dollar_price(date_web)
+        finally:
+            if driver:
+                try:
+                    driver.quit()
+                    print("🚗 WebDriver closed successfully.")
+                except Exception as e:
+                    print(f"⚠️ WebDriver close error: {e}")
 
-    if price and matched_date:
-        mask = df["Calendar Date"].dt.strftime("%d-%m-%Y") == date_csv
-        if mask.any():
-            df.loc[mask, "Dollar Index"] = price
-            print(f"✅Found Dollar Index close for {matched_date}: {price}")
-            print("✅Dollar Index Close Price updated in DataFrame.")
+    # --- MAIN EXECUTION PART ---
+    try:
+        price, matched_date = fetch_dollar_price(date_web)
+
+        if price and matched_date:
+            mask = df["Calendar Date"].dt.strftime("%d-%m-%Y") == date_csv
+            if mask.any():
+                df.loc[mask, "Dollar Index"] = price
+                print("✅Dollar Index Close Price updated in DataFrame.")
+            else:
+                print("⚠️ Date not found in DataFrame.")
         else:
-            print("⚠️ Date not found in DataFrame.")
-    else:
-        print("❌ Could not fetch Dollar Index close price.")
+            print("❌ Could not fetch Dollar Index close price.")
+
+    except Exception as e:
+        print(f"❌ Unexpected error in updating Dollar Index: {e}")
 
     return df
 
@@ -1206,18 +1415,17 @@ def update_latest_dollar_index_close(df):
 
 def update_latest_crudeoil_close(df):
 
-    def fetch_crude_price(date_str_web):
-        """Fetches the gold close price from the investing.com historical data page."""
+    def fetch_crude_price():
+        """Fetches the Crude Oil close price from the investing.com historical data page."""
         try:
             driver = setup_driver()
             driver.get("https://in.investing.com/commodities/crude-oil-historical-data")
-            # print("🌐 Opened investing.com page...")
 
             try:
                 WebDriverWait(driver, 10).until(
                     EC.element_to_be_clickable((By.ID, "onetrust-accept-btn-handler"))
                 ).click()
-                print("🍪Accepted cookies.")
+                print("🍪 Accepted cookies.")
             except:
                 print("✅No cookie popup or already accepted.")
 
@@ -1226,42 +1434,64 @@ def update_latest_crudeoil_close(df):
             )
 
             rows = driver.find_elements(By.XPATH, "//table//tbody/tr")
-
             for _ in range(10):
                 if any(row.text.strip() for row in rows):
                     break
-                print("⌛Waiting for data to populate...")
                 time.sleep(1)
 
-            for idx, row in enumerate(rows):
+            return rows, driver  # <-- return both rows and driver
+
+        except Exception as e:
+            print(f"❌ Error while scraping: {e}")
+            driver.quit()
+            return [], None
+
+    rows, driver = fetch_crude_price()
+
+    if not rows or not driver:
+        print("❌ No data fetched.")
+        return df
+
+    crude_oil_price = None
+    found_date = None
+
+    delta = 1  # Start with yesterday
+    max_days = 7
+
+    try:
+        while delta <= max_days:
+            check_date = datetime.now() - timedelta(days=delta)
+            check_date_web = check_date.strftime("%b %d, %Y")
+            check_date_csv = check_date.strftime("%d-%m-%Y")
+
+            for row in rows:
                 cols = row.find_elements(By.TAG_NAME, "td")
                 if len(cols) >= 2:
                     date_text = cols[0].text.strip()
                     close_price = cols[1].text.strip().replace(",", "")
-                    if clean_date(date_text) == clean_date(date_str_web):
-                        driver.quit()
-                        return float(close_price), date_text
+                    if clean_date(date_text) == clean_date(check_date_web):
+                        crude_oil_price = float(close_price)
+                        found_date = check_date_csv
+                        print(f"✅Found Crude Oil close for {check_date_web}: {crude_oil_price}")
+                        break
 
-            driver.quit()
-            return None, None
+            if crude_oil_price is not None:
+                break
+            else:
+                delta += 1
 
-        except Exception as e:
-            print(f"❌ Error while scraping: {e}")
-            return None, None
-  
+    finally:
+        driver.quit()  # <-- quit the driver after you're done
 
-    price, matched_date = fetch_crude_price(date_web)
-
-    if price and matched_date:
-        mask = df["Calendar Date"].dt.strftime("%d-%m-%Y") == date_csv
+    if crude_oil_price and found_date:
+        mask = df["Calendar Date"].dt.strftime("%d-%m-%Y") == found_date
         if mask.any():
-            df.loc[mask, "Crude Oil"] = price
-            print(f"✅Found Crude Oil close for {matched_date}: {price}")
-            print("✅Crude Oil Close Price updated in DataFrame.")
+            df.loc[mask, "Crude Oil"] = crude_oil_price
+            print(f"✅Crude Oil close price updated for {found_date} in DataFrame.")
         else:
-            print("⚠️ Date not found in DataFrame.")
+            print(f"⚠️Date {found_date} not found in DataFrame.")
     else:
-        print("❌ Could not fetch Crude Oil close price.")
+        print("❌ Could not find Crude Oil close price on website.")
 
     return df
 
@@ -1330,7 +1560,7 @@ def main():
 
     # Save to new CSV
     df.to_csv("Calendar.csv", index=False)
-    print("✅ All updates applied and saved to 'Calendar1.csv'")
+    print("✅All updates applied and saved to 'Calendar1.csv'")
 
 
 if __name__ == "__main__":
